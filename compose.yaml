@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: studio
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    ports: ["8000:8000"]
+    volumes: ["./backend:/app"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    environment:
+      VITE_DATA_MODE: ${VITE_DATA_MODE:-demo}
+      VITE_API_URL: http://localhost:8000/api/v1
+    ports: ["5173:5173"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on: [api]
+
+volumes:
+  postgres_data:
