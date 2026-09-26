@@ -105,7 +105,7 @@ For a local Python setup on Windows:
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ### 4) Frontend setup
