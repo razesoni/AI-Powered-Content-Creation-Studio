@@ -10,5 +10,7 @@ dist/
 coverage/
 *.pyc
 *.log
+data/images/generated/*
+!data/images/generated/.gitkeep
 .terraform/
 *.tfstate*

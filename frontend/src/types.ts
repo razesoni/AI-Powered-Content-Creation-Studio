@@ -18,9 +18,19 @@ export interface Draft {
   id: string; project_id: string; outline_id: string; title: string; content: string;
   format: string; version: number; updated_at: string;
 }
-export interface IdeaInput { topic: string; count: number; instructions?: string; idempotency_key: string }
+export type ImageStyle = "Photorealistic" | "Editorial" | "Collage" | "Illustration" | "3D" | "Anime";
+export type AspectRatio = "1:1" | "4:5" | "16:9" | "9:16";
+export interface GeneratedImage {
+  id: string; draft_id: string; project_id: string; style: ImageStyle; image_count: number;
+  aspect_ratio: AspectRatio; prompt: string; url: string; created_at: string;
+}
+export interface IdeaInput { topic: string; count: number; tone?: string; instructions?: string; idempotency_key: string }
 export interface OutlineInput { idea_id: string; instructions?: string; idempotency_key: string }
 export interface DraftInput { outline_id: string; format: string; instructions?: string; idempotency_key: string }
+export interface ImageInput {
+  draft_id: string; style: ImageStyle; image_count: number; aspect_ratio: AspectRatio;
+  prompt?: string; idempotency_key: string;
+}
 export interface StudioClient {
   login(email: string, password: string): Promise<User>;
   register(fullName: string, email: string, password: string): Promise<User>;
@@ -36,4 +46,6 @@ export interface StudioClient {
   listDrafts(projectId: string): Promise<Draft[]>;
   generateDraft(projectId: string, input: DraftInput): Promise<Draft>;
   saveDraft(id: string, input: Pick<Draft, "title" | "content" | "version">): Promise<Draft>;
+  listImages(projectId: string): Promise<GeneratedImage[]>;
+  generateImages(projectId: string, input: ImageInput): Promise<GeneratedImage[]>;
 }

@@ -1,7 +1,7 @@
-import type { Draft, DraftInput, Idea, IdeaInput, Outline, OutlineInput, Project, ProjectInput, StudioClient, User } from "../types";
+import type { Draft, DraftInput, GeneratedImage, Idea, IdeaInput, ImageInput, Outline, OutlineInput, Project, ProjectInput, StudioClient, User } from "../types";
 import { newId } from "../utils/id";
 
-type Data = { user: User | null; projects: Project[]; ideas: Idea[]; outlines: Outline[]; drafts: Draft[] };
+type Data = { user: User | null; projects: Project[]; ideas: Idea[]; outlines: Outline[]; drafts: Draft[]; images: GeneratedImage[] };
 const KEY = "content-studio-demo-v1";
 const now = () => new Date().toISOString();
 const uid = newId;
@@ -12,10 +12,10 @@ const seed: Data = {
     { id: "demo-1", title: "The Mindful Creator", description: "Ideas and scripts for a calmer creative life.", platform: "Instagram", content_type: "Post", target_audience: "Independent creators", tone: "Warm and encouraging", created_at: now(), updated_at: now() },
     { id: "demo-2", title: "Design Notes Weekly", description: "Practical lessons from the world of product design.", platform: "LinkedIn", content_type: "Article", target_audience: "Designers and founders", tone: "Thoughtful and clear", created_at: now(), updated_at: now() },
     { id: "demo-3", title: "Small Steps, Big Ideas", description: "Short educational videos about productive habits.", platform: "YouTube", content_type: "Video script", target_audience: "Students and young professionals", tone: "Friendly and energetic", created_at: now(), updated_at: now() },
-  ], ideas: [], outlines: [], drafts: [],
+  ], ideas: [], outlines: [], drafts: [], images: [],
 };
 function read(): Data {
-  try { const value = localStorage.getItem(KEY); return value ? JSON.parse(value) as Data : structuredClone(seed); }
+  try { const value = localStorage.getItem(KEY); const data = value ? JSON.parse(value) as Data : structuredClone(seed); data.images ||= []; return data; }
   catch { return structuredClone(seed); }
 }
 function write(data: Data) { localStorage.setItem(KEY, JSON.stringify(data)); }
@@ -32,7 +32,7 @@ export const demoClient: StudioClient = {
   async currentUser() { return read().user; },
   async listProjects() { await pause(180); return read().projects.sort((a, b) => b.updated_at.localeCompare(a.updated_at)); },
   async createProject(input: ProjectInput) { await pause(); const data = read(); const project: Project = { ...input, id: uid(), created_at: now(), updated_at: now() }; data.projects.unshift(project); write(data); return project; },
-  async deleteProject(id: string) { await pause(); const data = read(); data.projects = data.projects.filter((item) => item.id !== id); data.ideas = data.ideas.filter((item) => item.project_id !== id); data.outlines = data.outlines.filter((item) => item.project_id !== id); data.drafts = data.drafts.filter((item) => item.project_id !== id); write(data); },
+  async deleteProject(id: string) { await pause(); const data = read(); data.projects = data.projects.filter((item) => item.id !== id); data.ideas = data.ideas.filter((item) => item.project_id !== id); data.outlines = data.outlines.filter((item) => item.project_id !== id); data.drafts = data.drafts.filter((item) => item.project_id !== id); data.images = data.images.filter((item) => item.project_id !== id); write(data); },
   async listIdeas(projectId: string) { return read().ideas.filter((item) => item.project_id === projectId); },
   async generateIdeas(projectId: string, input: IdeaInput) {
     await pause(950); const data = read(); const project = projectOrThrow(data, projectId);
@@ -73,5 +73,17 @@ export const demoClient: StudioClient = {
     await pause(300); const data = read(); const draft = data.drafts.find((item) => item.id === id); if (!draft) throw new Error("Draft not found.");
     if (input.version !== draft.version) throw new Error("This draft changed elsewhere. Reload before saving.");
     Object.assign(draft, { title: input.title, content: input.content, version: draft.version + 1, updated_at: now() }); write(data); return { ...draft };
+  },
+  async listImages(projectId: string) { return read().images.filter((item) => item.project_id === projectId); },
+  async generateImages(projectId: string, input: ImageInput) {
+    await pause(1100); const data = read(); projectOrThrow(data, projectId); const draft = data.drafts.find((item) => item.id === input.draft_id && item.project_id === projectId); if (!draft) throw new Error("Create a draft first.");
+    const palette = ["%237657ff", "%23ff5ca8", "%23c8ff5b", "%23ff7548"];
+    const created = Array.from({ length: input.image_count }, (_, index): GeneratedImage => ({
+      id: uid(), draft_id: draft.id, project_id: projectId, style: input.style, image_count: input.image_count,
+      aspect_ratio: input.aspect_ratio, prompt: input.prompt || `A ${input.style} visual for ${draft.title}`,
+      url: `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1024' height='1024'%3E%3Crect width='1024' height='1024' fill='${palette[index % palette.length]}'/%3E%3Ccircle cx='780' cy='240' r='240' fill='%23f5ef57'/%3E%3Ctext x='70' y='850' font-family='Arial' font-weight='900' font-size='80' fill='%2317151c'%3ECREATOR VISUAL%3C/text%3E%3C/svg%3E`,
+      created_at: now(),
+    }));
+    data.images.push(...created); write(data); return created;
   },
 };

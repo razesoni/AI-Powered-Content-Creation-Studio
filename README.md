@@ -17,7 +17,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Frontend dependencies are installed separately with `npm ci` from `frontend/`. The complete frontend runs in demo mode by default; see [`frontend/README.md`](frontend/README.md) for the exact API contract and how to switch to your backend.
+Frontend dependencies are installed separately with `npm ci` from `frontend/`. The frontend connects to the local API by default; see [`frontend/README.md`](frontend/README.md) for the API contract and optional browser-only demo mode.
 
 ## Deliverables
 
@@ -28,6 +28,8 @@ Frontend dependencies are installed separately with `npm ci` from `frontend/`. T
 - `docs/05-ai-tools-and-automation.md` - recommended LLMs and automation tools
 - `docs/06-testing-deployment-security.md` - tests, CI/CD, deployment, and security checklist
 - `docs/07-traceability-matrix.md` - SRS requirement mapping
+- `database/001_initial_schema.sql` - pgAdmin-ready PostgreSQL schema
+- `database/README.md` - database creation and backend connection steps
 - `backend/`, `frontend/`, `infra/`, `.github/` - backend starter, complete frontend, and deployment scaffold
 
 The frontend includes sign-in, project management, idea/outline/draft workflow, and a Markdown editor. It runs against a local demo data adapter until you set `VITE_DATA_MODE=api`. The backend remains a starter for your own implementation.

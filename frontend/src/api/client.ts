@@ -1,7 +1,13 @@
-import type { Draft, DraftInput, Idea, IdeaInput, Outline, OutlineInput, Project, ProjectInput, StudioClient, User } from "../types";
+import type { Draft, DraftInput, GeneratedImage, Idea, IdeaInput, ImageInput, Outline, OutlineInput, Project, ProjectInput, StudioClient, User } from "../types";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 const TOKEN_KEY = "content-studio-token";
+const API_ORIGIN = new URL(API_URL).origin;
+
+export function assetUrl(path: string): string {
+  if (/^(https?:|data:|blob:)/.test(path)) return path;
+  return new URL(path, API_ORIGIN).toString();
+}
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code?: string) { super(message); }
@@ -70,4 +76,6 @@ export const apiClient: StudioClient = {
   async listDrafts(projectId: string) { return asList<Draft>(await request(`/projects/${encodeURIComponent(projectId)}/drafts`), "drafts"); },
   generateDraft(projectId: string, input: DraftInput) { return request<Draft>(`/projects/${encodeURIComponent(projectId)}/drafts/generate`, { method: "POST", body: body(input) }); },
   saveDraft(id: string, input: Pick<Draft, "title" | "content" | "version">) { return request<Draft>(`/drafts/${encodeURIComponent(id)}`, { method: "PATCH", body: body(input) }); },
+  async listImages(projectId: string) { return asList<GeneratedImage>(await request(`/projects/${encodeURIComponent(projectId)}/images`), "images"); },
+  async generateImages(projectId: string, input: ImageInput) { return asList<GeneratedImage>(await request(`/projects/${encodeURIComponent(projectId)}/images/generate`, { method: "POST", body: body(input) }), "images"); },
 };
