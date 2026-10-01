@@ -73,3 +73,33 @@ def test_generate_draft_uses_the_frontend_request_shape(client, monkeypatch):
     assert response.status_code == 201
     assert response.json()["id"] == str(draft.id)
     assert response.json()["content"] == draft.content
+
+
+def test_update_draft_saves_user_edits(client, monkeypatch):
+    test_client, user = client
+    draft_id = uuid4()
+    now = datetime.now(UTC)
+    saved = SimpleNamespace(
+        id=draft_id,
+        project_id=uuid4(),
+        outline_id=uuid4(),
+        title="Edited title",
+        content="# Edited content",
+        format="markdown",
+        version=2,
+        created_at=now,
+        updated_at=now,
+    )
+
+    async def fake_update(requested_id, user_id, title, content, version, db):
+        assert (requested_id, user_id) == (draft_id, user.id)
+        assert (title, content, version) == ("Edited title", "# Edited content", 1)
+        return saved
+
+    monkeypatch.setattr(main, "update_user_draft", fake_update)
+    response = test_client.patch(
+        f"/api/v1/drafts/{draft_id}",
+        json={"title": "Edited title", "content": "# Edited content", "version": 1},
+    )
+    assert response.status_code == 200
+    assert response.json()["version"] == 2

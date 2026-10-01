@@ -1,20 +1,32 @@
 import asyncio
+from datetime import datetime
 from pathlib import Path
+from typing import TypeVar
 from uuid import UUID, uuid4
 
-from backend.database.db_schema import AIGeneration
-from sqlalchemy import func, select
+from email_validator import EmailNotValidError, validate_email
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from email_validator import validate_email, EmailNotValidError
-from typing import Optional, TypeVar
-from datetime import datetime
 
+from backend.ai.llm.content_generation import (
+    generate_drafts,
+    generate_ideas,
+    generate_images,
+    generate_outlines,
+)
+from backend.database.db_schema import (
+    AIGeneration,
+    ContentIdea,
+    Draft,
+    Image,
+    Outline,
+    Project,
+    User,
+)
 from core.config import get_settings
 from core.security import hash_password, verify_password
-from backend.database.db_schema import ContentIdea, Draft, Outline, Project, User, AIGeneration, Image
 from server.schema.user_schema import LoginUser, RegisterUser
-from backend.ai.llm.content_generation import generate_ideas, generate_outlines, generate_drafts, generate_images
 
 settings = get_settings()
 engine = create_async_engine(settings.database_url)
@@ -25,12 +37,12 @@ async def register_user(user: RegisterUser, db):
     try:
         valid = validate_email(str(user.email))
         email = valid.email.lower()
-    except EmailNotValidError:
-        raise ValueError('Invalid Email')
+    except EmailNotValidError as exc:
+        raise ValueError("Invalid Email") from exc
     result = await db.execute(select(User).where(func.lower(User.email) == email))
     user_registered = result.scalar_one_or_none()
     if user_registered:
-        raise ValueError('User already registered')
+        raise ValueError("User already registered")
     new_user = User(
         full_name=user.full_name.strip(),
         email=email,
@@ -39,9 +51,9 @@ async def register_user(user: RegisterUser, db):
     db.add(new_user)
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await db.rollback()
-        raise ValueError('Error registering user')
+        raise ValueError("Error registering user") from exc
     await db.refresh(new_user)
     return new_user
 
@@ -51,9 +63,9 @@ async def login_user(user: LoginUser, db):
     result = await db.execute(select(User).where(func.lower(User.email) == email))
     user_db = result.scalar_one_or_none()
     if user_db is None:
-        raise ValueError('User not found')
+        raise ValueError("User not found")
     if not verify_password(user.password, user_db.password_hash):
-        raise ValueError('Invalid password')
+        raise ValueError("Invalid password")
     return user_db
 
 
@@ -90,8 +102,13 @@ async def delete_user_project(project_id, user_id, db):
     await db.commit()
     return True
 
+
 class IdempotencyKeyReuseError(ValueError):
     """Raised when a key is reused for a different generation request."""
+
+
+class DraftVersionConflictError(ValueError):
+    """Raised when a draft has changed since the client last loaded it."""
 
 
 T = TypeVar("T")
@@ -110,7 +127,9 @@ async def _existing_generation_result(
     if generation is None:
         return None
     if generation.project_id != project_id or generation.generation_type != generation_type:
-        raise IdempotencyKeyReuseError("Idempotency key was already used for another generation request")
+        raise IdempotencyKeyReuseError(
+            "Idempotency key was already used for another generation request"
+        )
     if generation.status != "succeeded" or not generation.result_ids:
         raise IdempotencyKeyReuseError("A generation with this idempotency key did not complete")
 
@@ -138,8 +157,12 @@ async def save_generated_ideas(idea_des, project_id, user_id, db, idempotency_ke
         return None
 
     cached = await _existing_generation_result(
-        db, user_id=user_id, project_id=project_id, generation_type="idea",
-        idempotency_key=idempotency_key, model=ContentIdea,
+        db,
+        user_id=user_id,
+        project_id=project_id,
+        generation_type="idea",
+        idempotency_key=idempotency_key,
+        model=ContentIdea,
     )
     if cached is not None:
         return cached
@@ -191,11 +214,18 @@ async def save_generated_ideas(idea_des, project_id, user_id, db, idempotency_ke
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        return await _existing_generation_result(db, user_id=user_id, project_id=project_id,
-            generation_type="idea", idempotency_key=idempotency_key, model=ContentIdea)
+        return await _existing_generation_result(
+            db,
+            user_id=user_id,
+            project_id=project_id,
+            generation_type="idea",
+            idempotency_key=idempotency_key,
+            model=ContentIdea,
+        )
     for idea in new_ideas:
         await db.refresh(idea)
     return new_ideas
+
 
 async def save_generated_outlines(idea_id, project_id, user_id, db, idempotency_key: UUID):
     idea = await db.scalar(
@@ -209,8 +239,12 @@ async def save_generated_outlines(idea_id, project_id, user_id, db, idempotency_
     if project is None:
         return None
     cached = await _existing_generation_result(
-        db, user_id=user_id, project_id=project_id, generation_type="outline",
-        idempotency_key=idempotency_key, model=Outline,
+        db,
+        user_id=user_id,
+        project_id=project_id,
+        generation_type="outline",
+        idempotency_key=idempotency_key,
+        model=Outline,
     )
     if cached is not None:
         return cached[0]
@@ -218,7 +252,7 @@ async def save_generated_outlines(idea_id, project_id, user_id, db, idempotency_
         idea_title=idea.title,
         concept_summary=idea.concept_summary,
         platform=idea.platform,
-        hook=idea.hook
+        hook=idea.hook,
     )
     data, metadata = _generation_metadata(generated)
     new_outline = Outline(
@@ -253,14 +287,27 @@ async def save_generated_outlines(idea_id, project_id, user_id, db, idempotency_
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        cached = await _existing_generation_result(db, user_id=user_id, project_id=project_id,
-            generation_type="outline", idempotency_key=idempotency_key, model=Outline)
+        cached = await _existing_generation_result(
+            db,
+            user_id=user_id,
+            project_id=project_id,
+            generation_type="outline",
+            idempotency_key=idempotency_key,
+            model=Outline,
+        )
         return cached[0]
     await db.refresh(new_outline)
     return new_outline
 
+
 async def save_generated_drafts(
-    outline_id, project_id, user_id, db, draft_format="markdown", instructions=None, idempotency_key: UUID | None = None
+    outline_id,
+    project_id,
+    user_id,
+    db,
+    draft_format="markdown",
+    instructions=None,
+    idempotency_key: UUID | None = None,
 ):
     outline = await db.scalar(
         select(Outline).where(Outline.id == outline_id, Outline.project_id == project_id)
@@ -275,8 +322,12 @@ async def save_generated_drafts(
     if idempotency_key is None:
         raise ValueError("idempotency_key is required")
     cached = await _existing_generation_result(
-        db, user_id=user_id, project_id=project_id, generation_type="draft",
-        idempotency_key=idempotency_key, model=Draft,
+        db,
+        user_id=user_id,
+        project_id=project_id,
+        generation_type="draft",
+        idempotency_key=idempotency_key,
+        model=Draft,
     )
     if cached is not None:
         return cached[0]
@@ -323,8 +374,14 @@ async def save_generated_drafts(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        cached = await _existing_generation_result(db, user_id=user_id, project_id=project_id,
-            generation_type="draft", idempotency_key=idempotency_key, model=Draft)
+        cached = await _existing_generation_result(
+            db,
+            user_id=user_id,
+            project_id=project_id,
+            generation_type="draft",
+            idempotency_key=idempotency_key,
+            model=Draft,
+        )
         return cached[0]
     await db.refresh(new_draft)
     return new_draft
@@ -337,7 +394,9 @@ async def get_project_ideas(project_id, user_id, db):
     if project is None:
         return None
     result = await db.execute(
-        select(ContentIdea).where(ContentIdea.project_id == project_id).order_by(ContentIdea.created_at.desc())
+        select(ContentIdea)
+        .where(ContentIdea.project_id == project_id)
+        .order_by(ContentIdea.created_at.desc())
     )
     return result.scalars().all()
 
@@ -364,6 +423,30 @@ async def get_project_drafts(project_id, user_id, db):
         select(Draft).where(Draft.project_id == project_id).order_by(Draft.updated_at.desc())
     )
     return result.scalars().all()
+
+
+async def update_user_draft(draft_id, user_id, title, content, version, db):
+    """Update an owned draft with optimistic locking to prevent lost edits."""
+    owned_draft = await db.scalar(
+        select(Draft.id)
+        .join(Project, Draft.project_id == Project.id)
+        .where(Draft.id == draft_id, Project.user_id == user_id)
+    )
+    if owned_draft is None:
+        return None
+
+    result = await db.execute(
+        update(Draft)
+        .where(Draft.id == draft_id, Draft.version == version)
+        .values(title=title.strip(), content=content, version=Draft.version + 1)
+    )
+    if result.rowcount != 1:
+        await db.rollback()
+        raise DraftVersionConflictError("This draft changed elsewhere. Reload it before saving.")
+
+    await db.commit()
+    return await db.scalar(select(Draft).where(Draft.id == draft_id))
+
 
 async def save_generated_images(
     draft_id, project_id, user_id, db, style, image_count, aspect_ratio, prompt, idempotency_key
@@ -441,8 +524,14 @@ async def save_generated_images(
         await db.rollback()
         for file_path in saved_paths:
             await asyncio.to_thread(file_path.unlink, missing_ok=True)
-        cached = await _existing_generation_result(db, user_id=user_id, project_id=project_id,
-            generation_type="image", idempotency_key=idempotency_key, model=Image)
+        cached = await _existing_generation_result(
+            db,
+            user_id=user_id,
+            project_id=project_id,
+            generation_type="image",
+            idempotency_key=idempotency_key,
+            model=Image,
+        )
         return cached
     except Exception:
         await db.rollback()
@@ -453,6 +542,7 @@ async def save_generated_images(
     for new_image in new_images:
         await db.refresh(new_image)
     return new_images
+
 
 async def get_project_images(project_id, user_id, db):
     project = await db.scalar(
@@ -465,23 +555,24 @@ async def get_project_images(project_id, user_id, db):
     )
     return result.scalars().all()
 
+
 async def log_ai_interaction(
     db,
-    user_id:UUID,
-    project_id:UUID,
-    generation_type:str,
-    provider:str,
-    model:str,
-    input_tokens:int,
-    output_tokens:int,
-    latency_ms:int,
-    status:str,
-    idempotency_key:UUID,
-    created_at:datetime | None,
-    completed_at:datetime | None,
-    error_code:Optional[str]=None,
-    request_id:Optional[UUID]=None,
-    prompt_version: Optional[str] = None,
+    user_id: UUID,
+    project_id: UUID,
+    generation_type: str,
+    provider: str,
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    latency_ms: int,
+    status: str,
+    idempotency_key: UUID,
+    created_at: datetime | None,
+    completed_at: datetime | None,
+    error_code: str | None = None,
+    request_id: UUID | None = None,
+    prompt_version: str | None = None,
     result_ids: list[str] | None = None,
 ):
     new_log = AIGeneration(
@@ -504,6 +595,7 @@ async def log_ai_interaction(
     )
     db.add(new_log)
     return new_log
+
 
 async def get_db():
     async with SessionLocal() as db:

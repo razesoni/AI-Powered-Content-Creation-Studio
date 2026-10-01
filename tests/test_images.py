@@ -111,11 +111,7 @@ async def test_cloudflare_flux_request_omits_unsupported_seed(monkeypatch):
 
         @staticmethod
         def json():
-            return {
-                "result": {
-                    "image": base64.b64encode(b"jpeg-data").decode("ascii")
-                }
-            }
+            return {"result": {"image": base64.b64encode(b"jpeg-data").decode("ascii")}}
 
     class FakeClient:
         def __init__(self, **kwargs):

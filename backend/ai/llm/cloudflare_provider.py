@@ -39,8 +39,7 @@ class CloudflareImageProvider:
 
     async def generate(self, *, prompt: str) -> GeneratedImage:
         endpoint = (
-            f"https://api.cloudflare.com/client/v4/accounts/"
-            f"{self.account_id}/ai/run/{self.model}"
+            f"https://api.cloudflare.com/client/v4/accounts/{self.account_id}/ai/run/{self.model}"
         )
         payload = {"prompt": prompt, "steps": 4}
         created_at = datetime.now(UTC)
@@ -58,8 +57,7 @@ class CloudflareImageProvider:
 
         if not response.is_success:
             raise CloudflareImageGenerationError(
-                f"Cloudflare image generation failed: {response.status_code} "
-                f"{response.text}"
+                f"Cloudflare image generation failed: {response.status_code} {response.text}"
             )
 
         try:

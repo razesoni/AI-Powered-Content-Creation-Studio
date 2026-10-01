@@ -1,6 +1,9 @@
 import asyncio
+
 from sqlalchemy import text
+
 from backend.database.db_store import engine
+
 
 async def main():
     async with engine.connect() as conn:
@@ -13,9 +16,15 @@ async def main():
             "images",
             "ai_generations",
         ]:
-            res = await conn.execute(text(f"SELECT column_name, data_type FROM information_schema.columns WHERE table_name = '{table}';"))
+            res = await conn.execute(
+                text(
+                    "SELECT column_name, data_type FROM information_schema.columns "
+                    f"WHERE table_name = '{table}';"
+                )
+            )
             cols = [r[0] for r in res.fetchall()]
             print(f"Table '{table}': {cols}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

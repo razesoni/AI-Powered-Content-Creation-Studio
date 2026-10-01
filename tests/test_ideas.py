@@ -92,8 +92,14 @@ def test_generate_outline_passes_the_request_idempotency_key(client, monkeypatch
     project_id, idea_id, idempotency_key = uuid4(), uuid4(), uuid4()
     now = datetime.now(UTC)
     outline = SimpleNamespace(
-        id=uuid4(), project_id=project_id, idea_id=idea_id, title="A practical outline",
-        outline_data={"sections": []}, version=1, created_at=now, updated_at=now,
+        id=uuid4(),
+        project_id=project_id,
+        idea_id=idea_id,
+        title="A practical outline",
+        outline_data={"sections": []},
+        version=1,
+        created_at=now,
+        updated_at=now,
     )
 
     async def fake_save(requested_idea_id, requested_project_id, user_id, db, request_key):

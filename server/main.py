@@ -11,16 +11,51 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.ai.llm.content_generation import IdeaGenerationError, OutlineGenerationError, DraftGenerationError, ImageGenerationError
+from backend.ai.llm.content_generation import (
+    DraftGenerationError,
+    IdeaGenerationError,
+    ImageGenerationError,
+    OutlineGenerationError,
+)
+from backend.database.db_schema import User
+from backend.database.db_store import (
+    DraftVersionConflictError,
+    IdempotencyKeyReuseError,
+    create_project,
+    delete_user_project,
+    get_db,
+    get_project_drafts,
+    get_project_ideas,
+    get_project_images,
+    get_project_outlines,
+    get_user_projects,
+    login_user,
+    register_user,
+    save_generated_drafts,
+    save_generated_ideas,
+    save_generated_images,
+    save_generated_outlines,
+    update_user_draft,
+)
 from core.config import get_settings
 from core.security import create_access_token, decode_access_token
-from backend.database.db_schema import User
-from backend.database.db_store import (create_project, delete_user_project, get_db, get_project_drafts, get_project_images,
-                            get_project_ideas, get_project_outlines,get_user_projects,save_generated_ideas,save_generated_images,
-                            save_generated_outlines,save_generated_drafts,login_user,register_user, IdempotencyKeyReuseError)
-
-from server.schema.user_schema import (DraftResponse,GenerateDraft,ImageResponse,GenerateImage,IdeaResponse,LoginUser,NewProject,
-                                    GenerateIdeas,GenerateOutline,OutlineResponse,ProjectResponse,RegisterUser,Token,UserResponse)
+from server.schema.user_schema import (
+    DraftResponse,
+    GenerateDraft,
+    GenerateIdeas,
+    GenerateImage,
+    GenerateOutline,
+    IdeaResponse,
+    ImageResponse,
+    LoginUser,
+    NewProject,
+    OutlineResponse,
+    ProjectResponse,
+    RegisterUser,
+    Token,
+    UpdateDraft,
+    UserResponse,
+)
 
 settings = get_settings()
 app = FastAPI(title="AI-Powered Content Creation Studio API", version="0.1.0")
@@ -72,10 +107,11 @@ async def register(request: RegisterUser, db: DatabaseSession):
     try:
         user = await register_user(request, db)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if not user:
         raise HTTPException(status_code=409, detail="User already registered")
     return user
+
 
 @app.post("/api/v1/auth/login", response_model=Token)
 @app.post("/login", response_model=Token, include_in_schema=False)
@@ -83,7 +119,7 @@ async def login(request: LoginUser, db: DatabaseSession):
     try:
         user = await login_user(request, db)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     if not user:
         raise HTTPException(
             status_code=401,
@@ -99,31 +135,58 @@ async def read_current_user(current_user: Annotated[User, Depends(get_current_us
 
 
 @app.post("/api/v1/projects", response_model=ProjectResponse, status_code=201)
-@app.post("/api/v1/users/me/new_project",response_model=ProjectResponse,status_code=201,include_in_schema=False)
+@app.post(
+    "/api/v1/users/me/new_project",
+    response_model=ProjectResponse,
+    status_code=201,
+    include_in_schema=False,
+)
 @app.post("/new_project", response_model=ProjectResponse, status_code=201, include_in_schema=False)
-async def new_project(p: NewProject, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession):    
+async def new_project(
+    p: NewProject, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     project = await create_project(p, current_user.id, db)
     return project
 
 
 @app.get("/api/v1/projects", response_model=list[ProjectResponse])
-async def list_projects(current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession):
+async def list_projects(
+    current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     projects = await get_user_projects(current_user.id, db)
     return projects
 
 
 @app.delete("/api/v1/projects/{project_id}", status_code=204)
-async def delete_project(project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession):
+async def delete_project(
+    project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     deleted = await delete_user_project(project_id, current_user.id, db)
     if not deleted:
         raise HTTPException(status_code=404, detail="Project not found")
 
 
-@app.post("/api/v1/projects/{project_id}/ideas/generate", response_model=list[IdeaResponse], status_code=201)
-@app.post("/api/v1/projects/{project_id}/generate_ideas", response_model=list[IdeaResponse], status_code=201, include_in_schema=False)
-async def generate_ideas_endpoint(idea_des: GenerateIdeas, project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession,):
+@app.post(
+    "/api/v1/projects/{project_id}/ideas/generate",
+    response_model=list[IdeaResponse],
+    status_code=201,
+)
+@app.post(
+    "/api/v1/projects/{project_id}/generate_ideas",
+    response_model=list[IdeaResponse],
+    status_code=201,
+    include_in_schema=False,
+)
+async def generate_ideas_endpoint(
+    idea_des: GenerateIdeas,
+    project_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: DatabaseSession,
+):
     try:
-        ideas = await save_generated_ideas(idea_des, project_id, current_user.id, db, idea_des.idempotency_key)
+        ideas = await save_generated_ideas(
+            idea_des, project_id, current_user.id, db, idea_des.idempotency_key
+        )
     except IdeaGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except IdempotencyKeyReuseError as exc:
@@ -134,17 +197,32 @@ async def generate_ideas_endpoint(idea_des: GenerateIdeas, project_id: UUID, cur
 
 
 @app.get("/api/v1/projects/{project_id}/ideas", response_model=list[IdeaResponse])
-async def list_ideas(project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession,):
+async def list_ideas(
+    project_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: DatabaseSession,
+):
     ideas = await get_project_ideas(project_id, current_user.id, db)
     if ideas is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return ideas
 
 
-@app.post("/api/v1/projects/{project_id}/outlines/generate",response_model=OutlineResponse,status_code=201)
-async def generate_outlines_endpoint(project_id: UUID, request: GenerateOutline, current_user: Annotated[User, Depends(get_current_user)],db: DatabaseSession,):
+@app.post(
+    "/api/v1/projects/{project_id}/outlines/generate",
+    response_model=OutlineResponse,
+    status_code=201,
+)
+async def generate_outlines_endpoint(
+    project_id: UUID,
+    request: GenerateOutline,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: DatabaseSession,
+):
     try:
-        outlines = await save_generated_outlines(request.idea_id, project_id, current_user.id, db, request.idempotency_key)
+        outlines = await save_generated_outlines(
+            request.idea_id, project_id, current_user.id, db, request.idempotency_key
+        )
     except OutlineGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except IdempotencyKeyReuseError as exc:
@@ -155,16 +233,34 @@ async def generate_outlines_endpoint(project_id: UUID, request: GenerateOutline,
 
 
 @app.get("/api/v1/projects/{project_id}/outlines", response_model=list[OutlineResponse])
-async def list_outlines(project_id: UUID,current_user: Annotated[User, Depends(get_current_user)],db: DatabaseSession):
+async def list_outlines(
+    project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     outlines = await get_project_outlines(project_id, current_user.id, db)
     if outlines is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return outlines
 
-@app.post("/api/v1/projects/{project_id}/drafts/generate",status_code=201,response_model=DraftResponse)
-async def generate_draft_from_frontend(project_id: UUID,request: GenerateDraft,current_user: Annotated[User, Depends(get_current_user)],db: DatabaseSession):
+
+@app.post(
+    "/api/v1/projects/{project_id}/drafts/generate", status_code=201, response_model=DraftResponse
+)
+async def generate_draft_from_frontend(
+    project_id: UUID,
+    request: GenerateDraft,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: DatabaseSession,
+):
     try:
-        draft = await save_generated_drafts(request.outline_id,project_id,current_user.id,db,draft_format=request.format,instructions=request.instructions,idempotency_key=request.idempotency_key)
+        draft = await save_generated_drafts(
+            request.outline_id,
+            project_id,
+            current_user.id,
+            db,
+            draft_format=request.format,
+            instructions=request.instructions,
+            idempotency_key=request.idempotency_key,
+        )
     except DraftGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except IdempotencyKeyReuseError as exc:
@@ -173,12 +269,39 @@ async def generate_draft_from_frontend(project_id: UUID,request: GenerateDraft,c
         raise HTTPException(status_code=404, detail="Project, idea, or outline not found")
     return draft
 
+
 @app.get("/api/v1/projects/{project_id}/drafts", response_model=list[DraftResponse])
-async def list_drafts(project_id: UUID,current_user: Annotated[User, Depends(get_current_user)],db: DatabaseSession):
+async def list_drafts(
+    project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     drafts = await get_project_drafts(project_id, current_user.id, db)
     if drafts is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return drafts
+
+
+@app.patch("/api/v1/drafts/{draft_id}", response_model=DraftResponse)
+async def update_draft(
+    draft_id: UUID,
+    request: UpdateDraft,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: DatabaseSession,
+):
+    try:
+        draft = await update_user_draft(
+            draft_id,
+            current_user.id,
+            request.title,
+            request.content,
+            request.version,
+            db,
+        )
+    except DraftVersionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if draft is None:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return draft
+
 
 @app.post(
     "/api/v1/projects/{project_id}/images/generate",
@@ -192,7 +315,17 @@ async def generate_images_endpoint(
     db: DatabaseSession,
 ):
     try:
-        images = await save_generated_images(request.draft_id,project_id,current_user.id,db,style=request.style,image_count=request.image_count,aspect_ratio=request.aspect_ratio,prompt=request.prompt,idempotency_key=request.idempotency_key)
+        images = await save_generated_images(
+            request.draft_id,
+            project_id,
+            current_user.id,
+            db,
+            style=request.style,
+            image_count=request.image_count,
+            aspect_ratio=request.aspect_ratio,
+            prompt=request.prompt,
+            idempotency_key=request.idempotency_key,
+        )
     except ImageGenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except IdempotencyKeyReuseError as exc:
@@ -200,9 +333,12 @@ async def generate_images_endpoint(
     if images is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return images
-        
+
+
 @app.get("/api/v1/projects/{project_id}/images", response_model=list[ImageResponse])
-async def list_images(project_id: UUID,current_user: Annotated[User, Depends(get_current_user)],db: DatabaseSession):
+async def list_images(
+    project_id: UUID, current_user: Annotated[User, Depends(get_current_user)], db: DatabaseSession
+):
     images = await get_project_images(project_id, current_user.id, db)
     if images is None:
         raise HTTPException(status_code=404, detail="Project not found")

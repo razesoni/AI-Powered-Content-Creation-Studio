@@ -1,15 +1,17 @@
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TypeVar
+from uuid import UUID, uuid4
+
 from google import genai
 from google.genai import types
-from dataclasses import dataclass
-from typing import TypeVar
 from pydantic import BaseModel
+
 from core.config import Settings
-import time
-from datetime import UTC, datetime
-from uuid import UUID
-from uuid import uuid4
 
 T = TypeVar("T", bound=BaseModel)
+
 
 @dataclass(frozen=True)
 class GenerationResult:
@@ -33,27 +35,36 @@ class GeminiProvider:
         self.client = genai.Client(api_key=settings.gemini_api_key)
         self.model = settings.gemini_model
 
-    async def generate(self, *, system_prompt: str, user_prompt: str, response_model: type[T]) -> GenerationResult:
+    async def generate(
+        self, *, system_prompt: str, user_prompt: str, response_model: type[T]
+    ) -> GenerationResult:
         started_at = time.perf_counter()
         created_at = datetime.now(UTC)
-        response = await self.client.aio.models.generate_content(model=self.model, contents=user_prompt, config=types.GenerateContentConfig(system_instruction=system_prompt, response_mime_type="application/json", response_schema=response_model,))
+        response = await self.client.aio.models.generate_content(
+            model=self.model,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                response_mime_type="application/json",
+                response_schema=response_model,
+            ),
+        )
         parsed = response.parsed
         completed_at = datetime.now(UTC)
         latency_ms = int((time.perf_counter() - started_at) * 1000)
         status = "succeeded"
         request_id = uuid4()
-        
 
         if parsed is None:
             raise RuntimeError("Provider returned no parsed output")
         usage = response.usage_metadata
         return GenerationResult(
-            error_code= response.prompt_feedback,
-            created_at = created_at,
-            completed_at = completed_at,
-            latency_ms = latency_ms,
-            status = status,
-            request_id = request_id,
+            error_code=response.prompt_feedback,
+            created_at=created_at,
+            completed_at=completed_at,
+            latency_ms=latency_ms,
+            status=status,
+            request_id=request_id,
             data=parsed,
             provider="gemini",
             model=self.model,

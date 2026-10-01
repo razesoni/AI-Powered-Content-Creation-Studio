@@ -14,7 +14,7 @@ class GenerateIdeasResponse(BaseModel):
 class OutlineSection(BaseModel):
     heading: str
     purpose: str
-    key_points: list[str] 
+    key_points: list[str]
 
 
 class OutlineData(BaseModel):
@@ -30,6 +30,7 @@ class GenerateOutlineResponse(BaseModel):
 class GenerateDraftResponse(BaseModel):
     title: str
     content_markdown: str
+
 
 class GenerateImageResponse(BaseModel):
     image_url: str

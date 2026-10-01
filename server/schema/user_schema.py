@@ -29,6 +29,7 @@ class NewProject(BaseModel):
     target_audience: Annotated[str, Field(min_length=1, max_length=500)]
     tone: Annotated[str, Field(min_length=1, max_length=120)]
 
+
 class GenerateIdeas(BaseModel):
     concept: str | None = None
     topic: str | None = None
@@ -63,6 +64,13 @@ class GenerateDraft(BaseModel):
     format: Literal["markdown", "html", "json"] = "markdown"
     instructions: str | None = None
     idempotency_key: UUID
+
+
+class UpdateDraft(BaseModel):
+    title: Annotated[str, Field(min_length=1, max_length=200)]
+    content: Annotated[str, Field(max_length=100_000)]
+    version: Annotated[int, Field(ge=1)]
+
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -126,6 +134,7 @@ class DraftResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
 class GenerateImage(BaseModel):
     draft_id: UUID
     idempotency_key: UUID
@@ -133,7 +142,8 @@ class GenerateImage(BaseModel):
     image_count: int = Field(default=1, ge=1, le=4)
     aspect_ratio: Literal["1:1", "4:5", "16:9", "9:16"] = "1:1"
     prompt: Annotated[str | None, Field(max_length=1000)] = None
-    
+
+
 class ImageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,4 +156,3 @@ class ImageResponse(BaseModel):
     prompt: str
     url: str
     created_at: datetime
-    

@@ -7,9 +7,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 import server.main as main
+from backend.database.db_store import get_db
 from core.config import get_settings
 from core.security import create_access_token, decode_access_token
-from backend.database.db_store import get_db
 
 
 async def unused_db():

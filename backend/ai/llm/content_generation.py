@@ -1,13 +1,21 @@
-
+from backend.ai.llm.cloudflare_provider import (
+    CloudflareImageGenerationError,
+    CloudflareImageProvider,
+)
 from backend.ai.llm.gemini_provider import GeminiProvider
+from backend.ai.llm.generation_schema import (
+    GenerateDraftResponse,
+    GenerateIdeasResponse,
+    GenerateOutlineResponse,
+    IdeaResponse,
+    OutlineData,
+    OutlineSection,
+)
 from backend.ai.prompts.draft_prompt import DRAFT_SYSTEM_PROMPT, DRAFT_USER_PROMPT
 from backend.ai.prompts.ideas_prompt import IDEAS_SYSTEM_PROMPT, IDEAS_USER_PROMPT
 from backend.ai.prompts.outline_prompt import OUTLINE_SUMMARY_PROMPT, OUTLINE_USER_PROMPT
 from core.config import get_settings
-from backend.ai.llm.generation_schema import (IdeaResponse, GenerateIdeasResponse,
-                                            OutlineSection, OutlineData, GenerateOutlineResponse, 
-                                            GenerateDraftResponse)
-from backend.ai.llm.cloudflare_provider import CloudflareImageProvider,CloudflareImageGenerationError
+
 
 class IdeaGenerationError(RuntimeError):
     """Raised when the configured AI provider cannot generate ideas."""
@@ -23,6 +31,7 @@ class DraftGenerationError(RuntimeError):
 
 class ImageGenerationError(RuntimeError):
     """Raised when the configured AI provider cannot generate an image."""
+
 
 def fallback_ideas(
     concept: str, no_of_ideas: int, tone: str, target_audience: str
@@ -41,9 +50,7 @@ def fallback_ideas(
     )
 
 
-def fallback_outline(
-    idea_title: str, concept_summary: str, hook: str
-) -> GenerateOutlineResponse:
+def fallback_outline(idea_title: str, concept_summary: str, hook: str) -> GenerateOutlineResponse:
     return GenerateOutlineResponse(
         title=idea_title,
         outline_data=OutlineData(
@@ -196,8 +203,7 @@ async def generate_images(
     try:
         provider = CloudflareImageProvider()
         return [
-            await provider.generate(prompt=image_prompt)
-            for _ in range(image_count)
+            await provider.generate(prompt=image_prompt) for _ in range(image_count)
         ], image_prompt
     except CloudflareImageGenerationError as exc:
         raise ImageGenerationError(str(exc)) from exc
