@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     access_token_minutes: int = 60
     jwt_issuer: str = "content-studio-api"
     jwt_audience: str = "content-studio-web"
-    cors_origins: list[str] | str = ["http://localhost:5173"]
+    cors_origins: list[str] | str = ["https://razecontentstudio.netlify.app/"]
     ai_provider: str = "gemini"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3.6-flash"
