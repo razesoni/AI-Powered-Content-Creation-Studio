@@ -1,6 +1,6 @@
 import type { Draft, DraftInput, GeneratedImage, Idea, IdeaInput, ImageInput, Outline, OutlineInput, Project, ProjectInput, StudioClient, User } from "../types";
 
-const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
+const API_URL = (import.meta.env.VITE_API_URL || "https://ai-powered-content-creation-studio.onrender.com/").replace(/\/$/, "");
 const TOKEN_KEY = "content-studio-token";
 const API_ORIGIN = new URL(API_URL).origin;
 
