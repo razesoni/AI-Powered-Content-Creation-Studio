@@ -116,18 +116,6 @@ npm ci
 npm run dev
 ```
 
-## Documentation
-
-The repository includes implementation documentation and planning artifacts:
-
-- `docs/01-project-structure.md` — architecture, modules, data flow, and database design
-- `docs/02-implementation-pipeline.md` — phased build plan and milestone checkpoints
-- `docs/03-api-and-ai-implementation.md` — API contracts, provider factory, prompts, safety, and observability
-- `docs/04-resources.md` — official learning and implementation resources
-- `docs/05-ai-tools-and-automation.md` — recommended LLMs and automation tools
-- `docs/06-testing-deployment-security.md` — tests, CI/CD, deployment, and security checklist
-- `docs/07-traceability-matrix.md` — SRS requirement mapping
-
 ## Repository Deliverables
 
 - Backend starter scaffold
@@ -140,5 +128,4 @@ The repository includes implementation documentation and planning artifacts:
 
 - SQLite is used only for isolated unit tests.
 - PostgreSQL remains the development and production source of truth.
-- The project includes a Terraform implementation boundary for deployment modules and environment configuration.
 - AI generation workflows are designed to include idempotency, validation, and status tracking.
