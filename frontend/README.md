@@ -27,6 +27,17 @@ If you use the root `docker compose` setup, set `VITE_DATA_MODE=api` in the root
 
 The browser sends a JSON login body and holds the access token in `sessionStorage`. Every protected request sends `Authorization: Bearer <token>`. Your backend must allow the frontend origin through CORS (`http://localhost:5173` for local development).
 
+## Deploy with Vercel and Render
+
+Set these environment variables in Vercel (Production, Preview, and Development as needed), then redeploy because Vite embeds them at build time:
+
+```env
+VITE_DATA_MODE=api
+VITE_API_URL=https://ai-powered-content-creation-studio.onrender.com/api/v1
+```
+
+In Render, set `CORS_ORIGINS` to the exact origin(s) that serve the frontend, comma-separated if there are multiple. For example, use `https://your-project.vercel.app` (no trailing slash); include your custom domain too if you use one. The browser's `Origin` must match one of these values.
+
 ## Required endpoints
 
 | Method | Path | Expected response |
