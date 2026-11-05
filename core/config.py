@@ -43,6 +43,17 @@ class Settings(BaseSettings):
             return [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
         return value
 
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: object) -> object:
+        """Use SQLAlchemy's asyncpg dialect for Render's standard Postgres URL."""
+        if isinstance(value, str):
+            if value.startswith("postgresql://"):
+                return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+            if value.startswith("postgres://"):
+                return value.replace("postgres://", "postgresql+asyncpg://", 1)
+        return value
+
 
 @lru_cache
 def get_settings() -> Settings:

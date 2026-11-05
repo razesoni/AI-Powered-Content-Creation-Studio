@@ -17,6 +17,7 @@ from backend.ai.llm.content_generation import (
     ImageGenerationError,
     OutlineGenerationError,
 )
+from backend.database.bootstrap import bootstrap_database
 from backend.database.db_schema import User
 from backend.database.db_store import (
     DraftVersionConflictError,
@@ -73,6 +74,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+async def initialize_database_schema() -> None:
+    """Create the schema on a newly provisioned database before serving requests."""
+    await bootstrap_database()
+
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 BearerToken = Annotated[str, Depends(oauth2_scheme)]
